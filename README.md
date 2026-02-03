@@ -23,7 +23,7 @@
    ```bash
    git clone [https://github.com/W-ArcherEmiya/gemini-web-enhancer.git](https://github.com/W-ArcherEmiya/gemini-web-enhancer.git)
 
-📝 反馈 (Feedback)
+## 📝 反馈 (Feedback)
 如果你发现了 Bug 或有新功能建议，欢迎在 GitHub 提交 Issue，或在 Greasy Fork 评论区留言。
 
 Built with ❤️ by [ArcherEmiya]
