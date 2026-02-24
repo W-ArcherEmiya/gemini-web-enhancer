@@ -1,48 +1,49 @@
 // ==UserScript==
-// @name         Gemini 目录插件
+// @name         AI 目录插件 (Gemini & ChatGPT)
 // @namespace    http://tampermonkey.net/
-// @version      2.1.1
-// @description  生成高效的Gemini对话目录索引窗口。
-// @author       Gemini Assistant
+// @version      2.2
+// @description  生成高效的 Gemini 与 ChatGPT 对话目录索引窗口。
+// @author       ArcherEmiya
 // @match        https://gemini.google.com/*
+// @match        https://chatgpt.com/*
 // @grant        none
 // @run-at       document-idle
 // @license      MIT
-// @history      2.1.1 修复单次多行命令以多书签条目显示问题，以及偶发定位失效问题。
 // ==/UserScript==
 
 (function() {
     'use strict';
 
-    // 1. 强力清理旧版 (防止冲突)
-    function nukeOldVersions() {
-        const ids = ['gemini-toc', 'gemini-toc-v2', 'gemini-toc-v2_3', 'gemini-toc-v2_4', 'gemini-toc-v2_5', 'gemini-toc-style', 'gemini-toc-style-v2_4', 'gemini-toc-style-v2_5'];
+    // 1. 强力清理旧版残留
+    function cleanUpOldVersions() {
+        const ids = ['gemini-toc', 'gemini-toc-v2', 'gemini-toc-v2_1', 'gemini-toc-v2_3', 'gemini-toc-v2_4', 'gemini-toc-v2_5', 'gemini-toc-v2_6', 'ai-toc-style'];
         ids.forEach(id => {
             const el = document.getElementById(id);
             if (el) el.remove();
         });
-        document.querySelectorAll('style[id^="gemini-toc"]').forEach(el => el.remove());
+        document.querySelectorAll('style[id^="gemini-toc"], style[id^="ai-toc"]').forEach(el => el.remove());
     }
-    nukeOldVersions();
+    cleanUpOldVersions();
 
-    console.log("Gemini Plugin v2.1: 启动中...");
+    console.log("AI TOC Plugin v2.2: 启动中...");
 
+    // 智能识别当前站点配置选择器
+    const IS_CHATGPT = window.location.hostname.includes('chatgpt.com');
     const CONFIG = {
-        selector: '.query-text-line',
+        selector: IS_CHATGPT ? '[data-message-author-role="user"]' : '.query-text-line',
         displayCount: 8
     };
 
-    // 2. 图标路径定义
+    // 2. 图标路径定义 (实心圆点)
     const PATHS = {
         search: "M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z",
         top: "M4 12l1.41 1.41L11 7.83V20h2V7.83l5.58 5.59L20 12l-8-8-8 8z",
         bottom: "M20 12l-1.41-1.41L13 16.17V4h-2v12.17l-5.58-5.59L4 12l8 8 8-8z",
         spin: "M12 4V2A10 10 0 0 0 2 12h2a8 8 0 0 1 8-8z",
-        // ★ 修改：这里改回了实心圆点 (Radius=5)
-        bullet: "M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10z"
+        bullet: "M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10z" // 实心圆点
     };
 
-    // 3. 安全 DOM 构建
+    // 3. 安全 DOM 构建 (禁止 innerHTML)
     function createIcon(key, className) {
         const svgNS = "http://www.w3.org/2000/svg";
         const svg = document.createElementNS(svgNS, "svg");
@@ -59,12 +60,12 @@
 
     // 4. 样式注入
     function injectStyles() {
-        const styleId = 'gemini-toc-style-v2_6';
+        const styleId = 'ai-toc-style-v2_2';
         if (document.getElementById(styleId)) return;
 
         const maxH = CONFIG.displayCount * 36;
         const css = `
-            #gemini-toc-v2_6 {
+            #ai-toc-v2_2 {
                 position: fixed; top: 80px; right: 24px; width: 280px;
                 background: #1e1f20; color: #e3e3e3; border-radius: 24px;
                 z-index: 2147483647; overflow: hidden;
@@ -74,12 +75,15 @@
                 border: 1px solid #444746; opacity: 0; transition: opacity 0.3s;
                 contain: content; /* 防干扰 */
             }
-            #gemini-toc-v2_6.toc-visible { opacity: 1; }
+            #ai-toc-v2_2.toc-visible { opacity: 1; }
+            
+            /* 防止翻译插件干扰 */
+            #ai-toc-v2_2.notranslate { translate: no; }
 
             .toc-header { padding: 16px 16px 8px 16px; background: #1e1f20; flex-shrink: 0; }
             .toc-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
             .toc-title { font-weight: 500; font-size: 14px; color: #e3e3e3; padding-left: 4px; }
-
+            
             .toc-btn {
                 background: transparent; border: none; color: #c4c7c5; cursor: pointer;
                 width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
@@ -111,10 +115,7 @@
             }
             .toc-item:hover { background: rgba(232,234,237,0.08); color: #e3e3e3; }
             .toc-icon { margin-right: 12px; color: #a8c7fa; display: flex; align-items: center; }
-
-            /* 这里可以微调圆点大小 */
             .toc-icon svg { width: 10px; height: 10px; }
-
             .toc-text { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
             .toc-hidden { display: none !important; }
             .toc-status { padding: 20px; text-align: center; color: #8e918f; font-size: 12px; }
@@ -125,24 +126,24 @@
         document.head.appendChild(style);
     }
 
-    // 5. 逻辑实现
+    // 5. UI 初始化
     function createUI() {
-        if (document.getElementById('gemini-toc-v2_6')) return;
+        if (document.getElementById('ai-toc-v2_2')) return;
         if (!document.body) return;
 
         injectStyles();
 
         const panel = document.createElement('div');
-        panel.id = 'gemini-toc-v2_6';
+        panel.id = 'ai-toc-v2_2';
         panel.className = 'notranslate';
         panel.setAttribute('translate', 'no');
 
-        // 头部结构
         const header = document.createElement('div'); header.className = 'toc-header';
-
+        
         const row = document.createElement('div'); row.className = 'toc-row';
-        const title = document.createElement('span'); title.className = 'toc-title'; title.textContent = '对话索引';
-
+        const title = document.createElement('span'); title.className = 'toc-title'; 
+        title.textContent = IS_CHATGPT ? 'ChatGPT 索引' : 'Gemini 索引';
+        
         const btnGroup = document.createElement('div');
         btnGroup.style.display = 'flex'; btnGroup.style.gap = '4px';
 
@@ -161,7 +162,7 @@
         const input = document.createElement('input');
         input.type = 'text'; input.placeholder = '搜索...';
         input.addEventListener('input', (e) => filterList(e.target.value));
-
+        
         searchDiv.append(searchIcon, input);
         header.append(row, searchDiv);
 
@@ -170,13 +171,13 @@
         panel.append(header, list);
         document.body.appendChild(panel);
 
-        // 拖拽
+        // 简单的拖拽逻辑
         header.addEventListener('mousedown', (e) => {
             if (e.target.tagName === 'INPUT' || e.target.closest('button')) return;
             const startX = e.clientX, startY = e.clientY;
             const rect = panel.getBoundingClientRect();
             const startLeft = rect.left, startTop = rect.top;
-
+            
             function onMove(ev) {
                 panel.style.left = startLeft + (ev.clientX - startX) + 'px';
                 panel.style.top = startTop + (ev.clientY - startY) + 'px';
@@ -209,10 +210,13 @@
     function handleTop() {
         const btn = this;
         btn.disabled = true;
-        btn.textContent = ''; btn.appendChild(createIcon('spin', 'toc-spin'));
+        // 安全替换图标
+        while(btn.firstChild) btn.removeChild(btn.firstChild);
+        btn.appendChild(createIcon('spin', 'toc-spin'));
+        
         const container = getScrollContainer();
         let retries = 0, lastH = 0;
-
+        
         const timer = setInterval(() => {
             container.scrollTop = 0;
             document.documentElement.scrollTop = 0;
@@ -221,7 +225,8 @@
             if (retries > 8) {
                 clearInterval(timer);
                 btn.disabled = false;
-                btn.textContent = ''; btn.appendChild(createIcon('top'));
+                while(btn.firstChild) btn.removeChild(btn.firstChild);
+                btn.appendChild(createIcon('top'));
                 scanContent();
             }
         }, 100);
@@ -241,15 +246,13 @@
         });
     }
 
-    // --- 核心扫描逻辑 ---
+    // 6. 核心扫描逻辑
     function scanContent() {
         const list = document.getElementById('toc-list');
         if (!list) return;
 
-        // 1. 获取所有文本行
+        // 聚合多行消息
         const allLines = Array.from(document.querySelectorAll(CONFIG.selector));
-
-        // 2. 聚合多行消息 (Group by Parent)
         const messages = [];
         let currentGroup = null;
 
@@ -269,42 +272,43 @@
 
         const total = messages.length;
 
-        // 3. 空状态处理
+        // 空状态
         if (total === 0) {
             if (!list.querySelector('.toc-status')) {
-                list.textContent = '';
+                while(list.firstChild) list.removeChild(list.firstChild);
                 const li = document.createElement('li');
                 li.className = 'toc-status'; li.textContent = '...';
                 list.appendChild(li);
             }
             return;
         } else {
-            if (list.querySelector('.toc-status')) list.textContent = '';
+            if (list.querySelector('.toc-status')) {
+                while(list.firstChild) list.removeChild(list.firstChild);
+            }
         }
 
-        // 4. 增量更新列表
+        // 增量更新
         for (let i = 0; i < total; i++) {
             const msg = messages[i];
             const txt = msg.text;
-
+            
             let item = list.children[i];
             if (!item) {
                 item = document.createElement('li');
                 item.className = 'toc-item';
-
+                
                 const iconDiv = document.createElement('span');
                 iconDiv.className = 'toc-icon';
                 iconDiv.appendChild(createIcon('bullet'));
-
+                
                 const textDiv = document.createElement('span');
                 textDiv.className = 'toc-text';
-
+                
                 item.appendChild(iconDiv);
                 item.appendChild(textDiv);
                 list.appendChild(item);
             }
 
-            // 检查内容更新
             const oldT = item.getAttribute('data-text');
             const newT = txt.toLowerCase();
 
@@ -314,29 +318,28 @@
                 item.querySelector('.toc-text').textContent = txt;
             }
 
-            // 强制更新点击事件
+            // 强制重新绑定事件
             item.onclick = () => {
                 if (msg.container && msg.container.isConnected) {
                     msg.container.scrollIntoView({behavior:'smooth', block:'center'});
                 } else {
                     handleBot();
                 }
-
                 const oldBg = item.style.background;
                 item.style.background = '#444a50';
                 setTimeout(() => item.style.background = oldBg, 300);
             };
         }
-
-        // 移除多余项
+        
+        // 移除多余
         while (list.children.length > total) {
             list.removeChild(list.lastChild);
         }
 
-        // 保持过滤
+        // 保持搜索
         const input = document.querySelector('.toc-search input');
         if (input && input.value) filterList(input.value);
-
+        
         // 自动沉底
         const c = getScrollContainer();
         const atBottom = (list.scrollHeight - list.scrollTop) <= (list.clientHeight + 40);
@@ -344,9 +347,9 @@
         if (!loading && atBottom) list.scrollTop = list.scrollHeight;
     }
 
-    // 启动
+    // 启动循环
     setInterval(() => {
-        const p = document.getElementById('gemini-toc-v2_6');
+        const p = document.getElementById('ai-toc-v2_2');
         if (!p) createUI(); else scanContent();
     }, 800);
 
